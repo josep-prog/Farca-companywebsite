@@ -145,22 +145,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
     console.log('Attempting to sign up user:', email);
-    
-    // Check if user already exists with this email and is deleted
-    const { data: existingUser } = await supabase.auth.signInWithPassword({
-      email,
-      password: 'dummy-password' // This will fail but tell us if user exists
-    });
 
-    // Try to sign up
+    // Try to sign up first
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone: phone || null,
+        }
+      }
     });
 
     if (error) {
       // If user already exists in auth, they might have a deleted profile
-      if (error.message.includes('already registered')) {
+      if (error.message.includes('already registered') || error.message.includes('already been registered')) {
         console.log('User already exists in auth, checking profile status...');
         
         // Try to sign them in to get their user ID
@@ -171,11 +171,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (signInData.user) {
           // Check if their profile is deleted
-          const { data: profile } = await supabase
+          const { data: profile, error: profileFetchError } = await supabase
             .from('profiles')
             .select('*')
             .eq('user_id', signInData.user.id)
             .single();
+            
+          if (profileFetchError && profileFetchError.code === 'PGRST116') {
+            // Profile doesn't exist, create it
+            console.log('Creating missing profile for existing auth user');
+            const { error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                user_id: signInData.user.id,
+                email,
+                full_name: fullName,
+                phone: phone || null,
+                role: 'client',
+                client_status: 'active',
+              });
+              
+            if (createError) {
+              console.error('Error creating profile for existing user:', createError);
+              throw new Error('Failed to create profile. Please contact support.');
+            }
+            
+            console.log('Profile created for existing auth user');
+            // Sign them out so they need to confirm email if required
+            await supabase.auth.signOut();
+            return;
+          }
             
           if (profile && profile.client_status === 'deleted') {
             // Reactivate the deleted account
@@ -195,8 +220,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             
             console.log('Deleted account reactivated successfully');
+            // Sign them out so they go through normal login flow
+            await supabase.auth.signOut();
             return;
           }
+          
+          // Account exists and is not deleted
+          throw new Error('An account with this email already exists. Please try logging in instead.');
+        } else {
+          // Could not sign in - might be wrong password or other issue
+          throw new Error('An account with this email already exists. Please try logging in instead.');
         }
       }
       
@@ -204,32 +237,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
 
-    if (data.user) {
-      // Create profile - use upsert to handle conflicts gracefully
-      console.log('Creating profile for user:', data.user.id);
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        user_id: data.user.id,
-        email,
-        full_name: fullName,
-        phone: phone || null,
-        role: 'client',
-        client_status: 'active',
-      }, {
-        onConflict: 'user_id'
-      });
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // Don't throw error if profile already exists
-        if (profileError.code !== '23505') { // Not a unique violation
-          throw profileError;
-        } else {
-          console.log('Profile already exists, continuing...');
+    // Registration successful - profile will be created by the database trigger
+    // or we can create it manually if needed
+    if (data.user && data.session) {
+      console.log('User registered successfully:', data.user.id);
+      
+      // The handle_new_user trigger should create the profile automatically
+      // But let's check if it exists and create if needed
+      setTimeout(async () => {
+        try {
+          const { data: profile, error: checkError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('user_id', data.user!.id)
+            .single();
+            
+          if (checkError && checkError.code === 'PGRST116') {
+            // Profile doesn't exist, create it manually
+            console.log('Creating profile manually (trigger may have failed)');
+            await supabase.from('profiles').insert({
+              user_id: data.user!.id,
+              email,
+              full_name: fullName,
+              phone: phone || null,
+              role: 'client',
+              client_status: 'active',
+            });
+          }
+        } catch (profileError) {
+          console.error('Error ensuring profile exists:', profileError);
         }
-      } else {
-        console.log('Profile created successfully');
-      }
+      }, 2000); // Wait 2 seconds for trigger to complete
     }
+    
+    console.log('Sign up completed successfully');
   };
 
   const signOut = async () => {
