@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { X } from 'lucide-react';
+import ImageUpload from './ImageUpload';
 
 interface ProductFormData {
   name: string;
@@ -24,6 +25,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<ProductFormData>({
     defaultValues: {
@@ -128,14 +130,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
           </div>
 
           <div>
-            <label htmlFor="image_url" className="block text-sm font-medium text-gray-700 mb-1">
-              Image URL
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Product Image
             </label>
-            <input
-              {...register('image_url')}
-              type="url"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="https://example.com/image.jpg"
+            <Controller
+              name="image_url"
+              control={control}
+              render={({ field }) => (
+                <ImageUpload
+                  value={field.value}
+                  onChange={field.onChange}
+                  disabled={loading}
+                  maxSize={5}
+                />
+              )}
             />
           </div>
 
