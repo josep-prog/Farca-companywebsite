@@ -6,27 +6,29 @@ import { supabase } from './supabase';
  */
 
 /**
- * Delete a client account completely - removes both profile and auth user
- * This requires a service role key for auth admin operations
+ * Soft delete a client account - marks account as deleted instead of removing it
+ * This prevents access while maintaining data integrity and handles auth conflicts
  */
 export const deleteClientAccount = async (clientId: string, userId: string) => {
   try {
-    // First, delete from profiles table
+    // Use soft delete - mark as deleted instead of removing the profile
     const { error: profileError } = await supabase
       .from('profiles')
-      .delete()
+      .update({ 
+        client_status: 'deleted',
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', clientId);
 
     if (profileError) {
-      console.error('Error deleting profile:', profileError);
+      console.error('Error marking profile as deleted:', profileError);
       throw profileError;
     }
 
-    // Note: Deleting auth users requires admin privileges via service role key
-    // This would need to be done on the backend with service role key
-    // For now, we'll mark the account as deleted in a different way
+    // Note: The auth user still exists in Supabase Auth but cannot access the app
+    // because the AuthContext will automatically sign out users with 'deleted' status
     
-    console.log('Client account deleted successfully');
+    console.log('Client account marked as deleted successfully');
     return { success: true };
   } catch (error) {
     console.error('Error deleting client account:', error);

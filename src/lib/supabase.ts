@@ -35,7 +35,7 @@ export type Database = {
           full_name: string;
           phone: string | null;
           role: 'admin' | 'client';
-          client_status: 'active' | 'inactive' | 'blocked';
+          client_status: 'active' | 'inactive' | 'blocked' | 'deleted';
           created_at: string;
           updated_at: string;
         };
@@ -46,7 +46,7 @@ export type Database = {
           full_name: string;
           phone?: string | null;
           role?: 'admin' | 'client';
-          client_status?: 'active' | 'inactive' | 'blocked';
+          client_status?: 'active' | 'inactive' | 'blocked' | 'deleted';
           created_at?: string;
           updated_at?: string;
         };
@@ -57,7 +57,7 @@ export type Database = {
           full_name?: string;
           phone?: string | null;
           role?: 'admin' | 'client';
-          client_status?: 'active' | 'inactive' | 'blocked';
+          client_status?: 'active' | 'inactive' | 'blocked' | 'deleted';
           created_at?: string;
           updated_at?: string;
         };

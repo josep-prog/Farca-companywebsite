@@ -67,10 +67,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
 
-      // Check if user is blocked
-      if (data.client_status === 'blocked' && data.role !== 'admin') {
-        console.log('User account is blocked');
-        toast.error('Your account has been blocked. Please contact support.');
+      // Check if user is blocked or deleted
+      if ((data.client_status === 'blocked' || data.client_status === 'deleted') && data.role !== 'admin') {
+        const message = data.client_status === 'deleted' 
+          ? 'Your account has been deleted. Please contact support if this is an error.'
+          : 'Your account has been blocked. Please contact support.';
+        console.log(`User account is ${data.client_status}`);
+        toast.error(message);
         await signOut();
         return;
       }
@@ -103,12 +106,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
     console.log('Attempting to sign up user:', email);
+    
+    // Check if user already exists with this email and is deleted
+    const { data: existingUser } = await supabase.auth.signInWithPassword({
+      email,
+      password: 'dummy-password' // This will fail but tell us if user exists
+    });
+
+    // Try to sign up
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
     if (error) {
+      // If user already exists in auth, they might have a deleted profile
+      if (error.message.includes('already registered')) {
+        console.log('User already exists in auth, checking profile status...');
+        
+        // Try to sign them in to get their user ID
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (signInData.user) {
+          // Check if their profile is deleted
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', signInData.user.id)
+            .single();
+            
+          if (profile && profile.client_status === 'deleted') {
+            // Reactivate the deleted account
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({
+                client_status: 'active',
+                full_name: fullName,
+                phone: phone || null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', signInData.user.id);
+              
+            if (updateError) {
+              console.error('Error reactivating account:', updateError);
+              throw new Error('Failed to reactivate account. Please contact support.');
+            }
+            
+            console.log('Deleted account reactivated successfully');
+            return;
+          }
+        }
+      }
+      
       console.error('Sign up error:', error);
       throw error;
     }
@@ -122,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         full_name: fullName,
         phone: phone || null,
         role: 'client',
+        client_status: 'active',
       }, {
         onConflict: 'user_id'
       });

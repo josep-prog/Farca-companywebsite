@@ -11,7 +11,7 @@ interface Client {
   email: string;
   full_name: string;
   phone: string | null;
-  client_status: 'active' | 'inactive' | 'blocked';
+  client_status: 'active' | 'inactive' | 'blocked' | 'deleted';
   created_at: string;
 }
 
@@ -29,6 +29,7 @@ const AdminClients: React.FC = () => {
         .from('profiles')
         .select('*')
         .eq('role', 'client')
+        .neq('client_status', 'deleted') // Exclude deleted clients from the list
         .order('created_at', { ascending: false });
 
       if (error) throw error;
