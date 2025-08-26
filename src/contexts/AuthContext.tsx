@@ -90,10 +90,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     console.log('Attempting to sign in user:', email);
-    const { error } = await supabase.auth.signInWithPassword({
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
     if (error) {
       console.error('Sign in error details:', {
         message: error.message,
@@ -101,6 +103,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       throw error;
     }
+    
+    // If sign in successful, check account status immediately
+    if (data.user) {
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('client_status, role')
+          .eq('user_id', data.user.id)
+          .single();
+          
+        if (profileError && profileError.code === 'PGRST116') {
+          // Profile doesn't exist - account was hard deleted
+          await supabase.auth.signOut();
+          throw new Error('Your account no longer exists. Please contact support if this is an error.');
+        }
+        
+        if (profile && profile.client_status === 'deleted' && profile.role !== 'admin') {
+          // Account is soft deleted
+          await supabase.auth.signOut();
+          throw new Error('Your account has been deleted. Please contact support if this is an error.');
+        }
+        
+        if (profile && profile.client_status === 'blocked' && profile.role !== 'admin') {
+          // Account is blocked
+          await supabase.auth.signOut();
+          throw new Error('Your account has been blocked. Please contact support.');
+        }
+      } catch (checkError: any) {
+        // If it's our custom error message, throw it
+        if (checkError.message.includes('account') || checkError.message.includes('blocked') || checkError.message.includes('deleted')) {
+          throw checkError;
+        }
+        // For other errors, continue with normal flow (will be caught by fetchProfile)
+        console.warn('Profile check during login failed:', checkError);
+      }
+    }
+    
     console.log('Sign in successful');
   };
 
