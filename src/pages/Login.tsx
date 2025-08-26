@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Eye, EyeOff, ShoppingCart } from 'lucide-react';
+import { Eye, EyeOff, ShoppingCart, Mail } from 'lucide-react';
 
 interface LoginForm {
   email: string;
@@ -13,6 +13,7 @@ interface LoginForm {
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn, isAdmin } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,8 +21,16 @@ const Login: React.FC = () => {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<LoginForm>();
+
+  // Display registration confirmation message if coming from registration
+  useEffect(() => {
+    if (location.state?.message) {
+      toast.success(location.state.message, { duration: 8000 });
+    }
+  }, [location.state]);
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true);
@@ -69,6 +78,20 @@ const Login: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
           <p className="text-gray-600">Sign in to Rwanda Shop</p>
         </div>
+
+        {location.state?.message && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-center space-x-3">
+            <Mail className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-blue-800 font-medium">
+                Email Confirmation Required
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Please check your email ({location.state?.email}) and click the confirmation link before signing in.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

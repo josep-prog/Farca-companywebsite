@@ -33,8 +33,16 @@ const Register: React.FC = () => {
     setLoading(true);
     try {
       await signUp(data.email, data.password, data.fullName, data.phone);
-      toast.success('Account created successfully!');
-      navigate('/login');
+      toast.success(
+        'Registration successful! Please check your email for a confirmation link before signing in.',
+        { duration: 6000 }
+      );
+      navigate('/login', { 
+        state: { 
+          message: 'Please check your email and confirm your account before signing in.',
+          email: data.email 
+        } 
+      });
     } catch (error: any) {
       toast.error(error.message || 'Registration failed');
     } finally {

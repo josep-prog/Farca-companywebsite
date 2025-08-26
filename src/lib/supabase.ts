@@ -7,7 +7,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Get the current origin, handling both development and production
+const getRedirectUrl = () => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  // Fallback for server-side or build time
+  return import.meta.env.PROD ? 'https://farca-companywebsite.onrender.com' : 'http://localhost:3000';
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    redirectTo: getRedirectUrl(),
+  },
+});
 
 export type Database = {
   public: {
