@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Database } from '../lib/supabase';
+import { toast } from 'react-hot-toast';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -55,10 +56,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('user_id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // If profile doesn't exist, user was deleted - sign them out
+        if (error.code === 'PGRST116') {
+          console.log('User profile not found - account may have been deleted');
+          toast.error('Your account has been removed. Please contact support if this is an error.');
+          await signOut();
+          return;
+        }
+        throw error;
+      }
+
+      // Check if user is blocked
+      if (data.client_status === 'blocked' && data.role !== 'admin') {
+        console.log('User account is blocked');
+        toast.error('Your account has been blocked. Please contact support.');
+        await signOut();
+        return;
+      }
+
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
+      // If there's an error fetching profile, sign out for security
+      await signOut();
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { UserCheck, UserX, Trash2, Mail, Phone } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { deleteClientAccount, updateClientStatus } from '../../lib/adminUtils';
 
 interface Client {
   id: string;
@@ -40,15 +41,10 @@ const AdminClients: React.FC = () => {
     }
   };
 
-  const updateClientStatus = async (clientId: string, status: 'active' | 'inactive' | 'blocked') => {
+  const handleUpdateClientStatus = async (clientId: string, status: 'active' | 'inactive' | 'blocked') => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ client_status: status, updated_at: new Date().toISOString() })
-        .eq('id', clientId);
-
-      if (error) throw error;
-      toast.success('Client status updated successfully');
+      await updateClientStatus(clientId, status);
+      toast.success(`Client ${status === 'blocked' ? 'blocked' : status === 'active' ? 'activated' : 'deactivated'} successfully`);
       fetchClients();
     } catch (error) {
       console.error('Error updating client status:', error);
@@ -56,23 +52,22 @@ const AdminClients: React.FC = () => {
     }
   };
 
-  const deleteClient = async (clientId: string) => {
-    if (!window.confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
+  const handleDeleteClient = async (clientId: string, userId: string) => {
+    if (!window.confirm(
+      'Are you sure you want to delete this client? This will permanently remove their account and they will no longer be able to login. This action cannot be undone.'
+    )) {
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', clientId);
-
-      if (error) throw error;
-      toast.success('Client deleted successfully');
+      // Note: This currently only deletes the profile. In a full implementation,
+      // you would also need to delete the auth user using Supabase Admin API
+      await deleteClientAccount(clientId, userId);
+      toast.success('Client account deleted successfully');
       fetchClients();
     } catch (error) {
       console.error('Error deleting client:', error);
-      toast.error('Failed to delete client');
+      toast.error('Failed to delete client account');
     }
   };
 
@@ -148,7 +143,7 @@ const AdminClients: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
                       value={client.client_status}
-                      onChange={(e) => updateClientStatus(client.id, e.target.value as 'active' | 'inactive' | 'blocked')}
+                      onChange={(e) => handleUpdateClientStatus(client.id, e.target.value as 'active' | 'inactive' | 'blocked')}
                       className={`px-2 py-1 text-xs rounded-full ${getStatusColor(client.client_status)} border-none focus:ring-2 focus:ring-blue-500`}
                     >
                       <option value="active">Active</option>
@@ -163,7 +158,7 @@ const AdminClients: React.FC = () => {
                     <div className="flex space-x-2">
                       {client.client_status === 'blocked' ? (
                         <button
-                          onClick={() => updateClientStatus(client.id, 'active')}
+                          onClick={() => handleUpdateClientStatus(client.id, 'active')}
                           className="text-green-600 hover:text-green-900"
                           title="Unblock client"
                         >
@@ -171,7 +166,7 @@ const AdminClients: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => updateClientStatus(client.id, 'blocked')}
+                          onClick={() => handleUpdateClientStatus(client.id, 'blocked')}
                           className="text-red-600 hover:text-red-900"
                           title="Block client"
                         >
@@ -179,7 +174,7 @@ const AdminClients: React.FC = () => {
                         </button>
                       )}
                       <button
-                        onClick={() => deleteClient(client.id)}
+                        onClick={() => handleDeleteClient(client.id, client.user_id)}
                         className="text-red-600 hover:text-red-900"
                         title="Delete client"
                       >
